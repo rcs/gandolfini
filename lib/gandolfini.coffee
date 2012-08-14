@@ -1,7 +1,25 @@
 http = require 'http'
 url = require 'url'
 und = require 'underscore'
-log = require 'winston'
+winston = require 'winston'
+
+logger = new (winston.Logger)(
+  transports:[
+    new (winston.transports.Console)(
+      colorize: true
+      timestamp: true
+    )
+  ]
+)
+
+
+logProxy = (original,proxyReq) ->
+  ip = original.socket.remoteAddress || '-'
+  ref = original.headers.referer || '-'
+  origin = original.headers.origin || '-'
+
+  logger.info "#{ip} \"#{ref}\" \"#{origin}\"  -> #{proxyReq.hostname}:#{proxyReq.port}/#{proxyReq.path}"
+
 
 
 allowMethods = process.env.ALLOW_METHODS || ['HEAD', 'GET','POST','PUT', 'DELETE', 'TRACE', 'OPTIONS', 'PATCH'].join ', '
@@ -9,9 +27,9 @@ allowHeaders = process.env.ALLOW_HEADERS || ['content-type','x-requested-with', 
 
 proxy = new (require 'http-proxy').RoutingProxy();
 proxy.on 'error', (err) ->
-  log.error "Error: #{err}"
+  logger.error "Error: #{err}"
 proxy.on 'proxyError', (err) ->
-  log.error "Proxy error: #{err}"
+  logger.error "Proxy error: #{err}"
 
 validHostname = (host) ->
 
@@ -65,7 +83,6 @@ exports = module.exports = (options = {}) ->
       return
 
 
-    toRequestUrl = url.parse( protocol + '://' + host + '/' + pathParts.join '/' )
 
 
     origWriteHead = res.writeHead
@@ -83,18 +100,15 @@ exports = module.exports = (options = {}) ->
       origWriteHead.apply this, arguments
 
 
-    req.url = toRequestUrl.pathname
+    toRequestUrl = url.parse( protocol + '://' + host + '/' + pathParts.join '/' )
+    req.url = toRequestUrl.path
+    toRequestUrl.port ?= if (toRequestUrl.protocol == 'https:') then 443 else 80
 
-
-    console.log
-      host: toRequestUrl.hostname
-      port: toRequestUrl.port || 80
-      https: toRequestUrl.protocol == 'https:'
-      native: toRequestUrl.protocol
+    logProxy(req,toRequestUrl)
 
     proxy.proxyRequest(req, res, {
       host: toRequestUrl.hostname
-      port: toRequestUrl.port || if (toRequestUrl.protocol == 'https:') then 443 else 80
+      port: toRequestUrl.port
       target: if (toRequestUrl.protocol == 'https:') 
           { https: true }
         else

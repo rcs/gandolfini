@@ -6,9 +6,6 @@ gandolfini = require '../lib/gandolfini'
 
 connect = require 'connect'
 
-console.log process.env.PORT
-
-
 http.createServer(
   connect()
     .use(connect.logger())
