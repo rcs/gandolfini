@@ -1,10 +1,12 @@
-#!/usr/bin/env coffee
+#!coffee
 
 
 http = require 'http'
 gandolfini = require '../lib/gandolfini'
 
 connect = require 'connect'
+
+console.log process.env.PORT
 
 
 http.createServer(
