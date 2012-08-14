@@ -57,7 +57,7 @@ jQuery.get('http://localhost:8080/api.crunchbase.com/v/1/company/facebook.js', f
 And now we've got what we want.
 
 ```
-// XHR finished loading: "http://gandolfini.herokuapp.com/api.crunchbase.com/v/1/company/facebook.js". jquery.min.js:4
+// XHR finished loading: "http://localhost:8080/api.crunchbase.com/v/1/company/facebook.js". jquery.min.js:4
 ["name", "permalink", "crunchbase_url", "homepage_url", "blog_url", "blog_feed_url", "twitter_username", "category_code", "number_of_employees", "founded_year", "founded_month", "founded_day", "deadpooled_year", "deadpooled_month", "deadpooled_day", "deadpooled_url", "tag_list", "alias_list", "email_address", "phone_number", "description", "created_at", "updated_at", "overview", "image", "products", "relationships", "competitions", "providerships", "total_money_raised", "funding_rounds", "investments", "acquisition", "acquisitions", "offices", "milestones", "ipo", "video_embeds", "screenshots", "external_links"]
 ```
 
