@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Gandolfini by rcs</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1 class="header">Gandolfini</h1>
+        <p class="header">CORS proxy for node.js</p>
+
+        <ul>
+          <li class="download"><a class="buttons" href="https://github.com/rcs/gandolfini/zipball/master">Download ZIP</a></li>
+          <li class="download"><a class="buttons" href="https://github.com/rcs/gandolfini/tarball/master">Download TAR</a></li>
+          <li><a class="buttons github" href="https://github.com/rcs/gandolfini">View On GitHub</a></li>
+        </ul>
+
+        <p class="header">This project is maintained by <a class="header name" href="https://github.com/rcs">rcs</a></p>
+
+
+      </header>
+      <section>
+        <h1>Quick start</h1>
+
+<pre><code>git clone git@github.com:rcs/gandolfini.git
+cd gandolfini
+bin/gandolfini
+
+</code></pre>
+
+<h1>What it is</h1>
+
+<p><img src="http://upload.wikimedia.org/wikipedia/commons/thumb/0/03/JamesGandolfiniSept11TIFF.jpg/192px-JamesGandolfiniSept11TIFF.jpg" alt="James Gandolfini"><em>An homage to the most famous bouncer of all time.</em></p>
+
+<p>Single page apps are cool.
+Browser security models are cool.</p>
+
+<p>Developing against web APIs that don't implement CORS headers isn't cool.</p>
+
+<p>We can fix that now.</p>
+
+<p>Gandolfini serves as a bouncer for all those APIs that you want to use but can't. Request through Gandolfini, and get your data with all the necessary bits to let you access it on the client.</p>
+
+<h2>Example</h2>
+
+<p>Let's say we wanted to display Crunchbase data on our website, being the good web 2.3 citizens we are.</p>
+
+<p>They have a nice, simple api. We'll grab the facebook info.</p>
+
+<div class="highlight"><pre><span class="nx">jQuery</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span>
+  <span class="s1">'http://api.crunchbase.com/v/1/company/facebook.js'</span><span class="p">,</span>
+  <span class="kd">function</span><span class="p">(</span><span class="nx">data</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nb">Object</span><span class="p">.</span><span class="nx">keys</span><span class="p">(</span><span class="nx">data</span><span class="p">);</span>
+  <span class="p">},</span><span class="s2">"json"</span><span class="p">);</span>
+</pre></div>
+
+<p>And we reload the page and load the console, already feeling our Klout score rising.</p>
+
+<p>Instead of our juicy facebook data, we get:</p>
+
+<pre><code>XMLHttpRequest cannot load http://api.crunchbase.com/v/1/company/facebook.js. Origin http://localhost:3000 is not allowed by Access-Control-Allow-Origin.
+</code></pre>
+
+<p>Lame. Let's route it through gandolfini.</p>
+
+<div class="highlight"><pre><span class="nx">jQuery</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">'http://localhost:8080/api.crunchbase.com/v/1/company/facebook.js'</span><span class="p">,</span> <span class="kd">function</span><span class="p">()</span><span class="err">…</span>
+</pre></div>
+
+<p>And now we've got what we want.</p>
+
+<pre><code>// XHR finished loading: "http://gandolfini.herokuapp.com/api.crunchbase.com/v/1/company/facebook.js". jquery.min.js:4
+["name", "permalink", "crunchbase_url", "homepage_url", "blog_url", "blog_feed_url", "twitter_username", "category_code", "number_of_employees", "founded_year", "founded_month", "founded_day", "deadpooled_year", "deadpooled_month", "deadpooled_day", "deadpooled_url", "tag_list", "alias_list", "email_address", "phone_number", "description", "created_at", "updated_at", "overview", "image", "products", "relationships", "competitions", "providerships", "total_money_raised", "funding_rounds", "investments", "acquisition", "acquisitions", "offices", "milestones", "ipo", "video_embeds", "screenshots", "external_links"]
+</code></pre>
+
+<h2>Use in an existing app</h2>
+
+<p>Gandolfini can also be used as Connect middleware.</p>
+
+<div class="highlight"><pre><span class="nx">http</span> <span class="o">=</span> <span class="nx">require</span> <span class="s1">'http'</span>
+<span class="nx">connect</span> <span class="o">=</span> <span class="nx">require</span> <span class="s1">'connect'</span>
+<span class="nx">gandolfini</span> <span class="o">=</span> <span class="nx">require</span> <span class="s1">'gandolfini'</span>
+
+<span class="nx">http</span><span class="p">.</span><span class="nx">createServer</span><span class="p">(</span>
+  <span class="nx">connect</span><span class="p">()</span>
+    <span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">connect</span><span class="p">.</span><span class="nx">logger</span><span class="p">())</span>
+    <span class="p">.</span><span class="nx">use</span><span class="p">(</span><span class="nx">gandolfini</span><span class="p">())</span>
+  <span class="p">)</span>
+<span class="p">).</span><span class="nx">listen</span><span class="p">(</span><span class="mi">8080</span><span class="p">);</span>
+</pre></div>
+      </section>
+      <footer>
+        <p><small>Hosted on <a href="https://pages.github.com">GitHub Pages</a> using the Dinky theme</small></p>
+      </footer>
+    </div>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+		          <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("UA-28915475-1");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
+  </body>
+</html>
