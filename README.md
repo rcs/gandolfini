@@ -3,6 +3,7 @@
 ```
 git clone git@github.com:rcs/gandolfini.git
 cd gandolfini
+npm install
 bin/gandolfini
 
 ```
