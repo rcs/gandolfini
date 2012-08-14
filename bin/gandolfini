@@ -1,0 +1,19 @@
+#!/usr/bin/env coffee
+
+
+http = require 'http'
+gandolfini = require '../lib/gandolfini'
+
+connect = require 'connect'
+
+
+http.createServer(
+  connect()
+    .use(connect.logger())
+    .use(gandolfini
+      allowMethods : process.env.ALLOW_METHODS || ['HEAD', 'GET','POST','PUT', 'DELETE', 'TRACE', 'OPTIONS', 'PATCH'].join ', '
+      allowHeaders : process.env.ALLOW_HEADERS || ['content-type','x-requested-with', 'accept', 'accept-language', 'accept-range', 'authorization'].join ', '
+    )
+).listen process.env.PORT || 8080
+
+# vim: set filetype=coffee :
