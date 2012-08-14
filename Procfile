@@ -1,1 +1,1 @@
-web: bin/gandolfini
+web: coffee bin/gandolfini
