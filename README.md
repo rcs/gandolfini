@@ -62,5 +62,21 @@ And now we've got what we want.
 
 
 
+## Use in an existing app
+
+Gandolfini can also be used as Connect middleware.
+
+```javascript
+http = require 'http'
+connect = require 'connect'
+gandolfini = require 'gandolfini'
+
+http.createServer(
+  connect()
+    .use(connect.logger())
+    .use(gandolfini())
+  )
+).listen(8080);
+```
 
 

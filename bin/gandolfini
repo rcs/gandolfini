@@ -2,7 +2,7 @@
 
 
 http = require 'http'
-gandolfini = require '../lib/gandolfini'
+gandolfini = require '../'
 
 connect = require 'connect'
 
