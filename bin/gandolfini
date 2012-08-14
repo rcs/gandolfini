@@ -6,6 +6,8 @@ gandolfini = require '../lib/gandolfini'
 
 connect = require 'connect'
 
+port = process.env.PORT || 8080
+
 http.createServer(
   connect()
     .use(connect.logger())
@@ -14,5 +16,7 @@ http.createServer(
       allowHeaders : process.env.ALLOW_HEADERS || ['content-type','x-requested-with', 'accept', 'accept-language', 'accept-range', 'authorization'].join ', '
     )
 ).listen process.env.PORT || 8080
+
+console.log "Listening on port #{port}"
 
 # vim: set filetype=coffee :

@@ -93,7 +93,7 @@ exports = module.exports = (options = {}) ->
       return
 
 
-    # Things we recognize as protocols
+    # Things we recognize as protocols to pull out of the path
     protocols = ['http','https']
 
     # 1 to avoid the initial empty element
@@ -116,7 +116,7 @@ exports = module.exports = (options = {}) ->
 
 
     # Internal - Write the CORS headers on proxied responses
-    # Modifes response inline
+    # Modifies response inline
     #
     # Returns nothing
 
