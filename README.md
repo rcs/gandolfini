@@ -62,6 +62,16 @@ And now we've got what we want.
 ```
 
 
+## Special sauce
+
+Gandolfini supports special query parameters to set headers on the outgoing request.
+
+parameter    | effect
+------------ | -------------
+_gr          | Referer (ex: `_gr=site.com`)
+_gct         | Content-Type (ex: `_gct=application/json`)
+
+
 
 ## Use in an existing app
 

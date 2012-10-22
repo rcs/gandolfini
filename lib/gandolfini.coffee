@@ -2,6 +2,7 @@ http = require 'http'
 url = require 'url'
 und = require 'underscore'
 winston = require 'winston'
+querystring = require 'querystring'
 
 logger = new (winston.Logger)(
   transports:[
@@ -24,7 +25,7 @@ logProxy = (original,proxyReq) ->
   ref = original.headers.referer || '-'
   origin = original.headers.origin || '-'
 
-  logger.info "#{ip} \"#{ref}\" \"#{origin}\"  -> #{proxyReq.hostname}:#{proxyReq.port}/#{proxyReq.path}"
+  logger.info "#{ip} \"#{ref}\" \"#{origin}\"  -> #{proxyReq.protocol}//#{proxyReq.hostname}:#{proxyReq.port}/#{proxyReq.path}"
 
 
 
@@ -93,27 +94,47 @@ exports = module.exports = (options = {}) ->
       return
 
 
-    # Things we recognize as protocols to pull out of the path
-    protocols = ['http','https']
+    parsedUrl = url.parse(req.url)
+
+    mogrifiedUrl = {}
 
     # 1 to avoid the initial empty element
-    pathParts = url.parse(req.url).path.split('/')[1..]
+    pathParts = parsedUrl.pathname.split('/')[1..]
 
-    # If the first part of the path is something we recognize as a protocol use
-    # that, otherwise default to http
-    if pathParts[0] in protocols
-      protocol = pathParts.shift()
+    mogrifiedUrl.protocol = if pathParts[0] in ['http','https']
+      pathParts.shift()
     else
-      protocol = 'http'
+      'http'
 
-    host = pathParts.shift()
+    [mogrifiedUrl.host, mogrifiedUrl.port] = (pathParts.shift()).split ':'
+
+    mogrifiedUrl.pathname = pathParts.join '/'
+
+
+    # Snarf gandolfini specific query parameters out of the URL
+    referer = undefined
+    mogrifiedUrl.query = do ->
+
+      return parsedUrl.query unless parsedUrl.query
+
+      query = querystring.parse(parsedUrl.query)
+      if query['_gr']
+        req.headers['referer'] = query['_gr']
+        delete query['_gr']
+
+      if query['_gct']
+        req.headers['content-type'] = query['_gct']
+        delete query['_gct']
+
+      query
+
+    mogrifiedUrl.pathname = pathParts.join '/'
 
     # If we can't find a valid host, respond status 400
-    if !host or !validHostname(host)
+    if !mogrifiedUrl.host or !validHostname(mogrifiedUrl.host)
       res.writeHead 400
       res.end()
       return
-
 
     # Internal - Write the CORS headers on proxied responses
     # Modifies response inline
@@ -136,24 +157,30 @@ exports = module.exports = (options = {}) ->
       origWriteHead.apply this, arguments
 
 
-    # Create a the proxy target url from parts
-    toRequestUrl = url.parse( protocol + '://' + host + '/' + pathParts.join '/' )
-    # Set request url to target url
-    req.url = toRequestUrl.path
 
-    # Set the port
-    toRequestUrl.port ?= if (toRequestUrl.protocol == 'https:') then 443 else 80
+    # Set the port if not set
+    targetPort = mogrifiedUrl.port || if (mogrifiedUrl.protocol.match /^https/ ) then 443 else 80
+
+
+    # Round-trip through url to fill structure
+    finalUrl = url.parse url.format mogrifiedUrl
+
+    # Create a the proxy target url from parts
+    toRequestUrl = url.format(finalUrl)
+
+    # Set request url to target url
+    req.url = finalUrl.path
 
     # Log our intentions
-    logProxy(req,toRequestUrl)
+    logProxy req, finalUrl
 
 
     # Send the modified request to the proxy channel, setting target to our
     # parsed fragments
     proxy.proxyRequest(req, res, {
-      host: toRequestUrl.hostname
-      port: toRequestUrl.port
-      target: if (toRequestUrl.protocol == 'https:') 
+      host: finalUrl.hostname
+      port: targetPort
+      target: if (finalUrl.protocol == 'https:')
           { https: true }
         else
           {}
