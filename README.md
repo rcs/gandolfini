@@ -68,8 +68,8 @@ Gandolfini supports special query parameters to set headers on the outgoing requ
 
 parameter    | effect
 ------------ | -------------
-_gr          | Referer (ex: `_gr=site.com`)
-_gct         | Content-Type (ex: `_gct=application/json`)
+_gr          |  `_gr=site.com` becomes `Referer: site.com`
+_gct         |  `_gct=application/json` becomes `Content-Type: application/json`
 
 
 
