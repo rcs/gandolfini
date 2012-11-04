@@ -70,6 +70,7 @@ parameter    | effect
 ------------ | -------------
 _gr          |  `_gr=site.com` becomes `Referer: site.com`
 _gct         |  `_gct=application/json` becomes `Content-Type: application/json`
+_ga         |  `_ga=application/json` becomes `Accept: application/json`
 
 
 

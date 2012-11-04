@@ -126,6 +126,10 @@ exports = module.exports = (options = {}) ->
         req.headers['content-type'] = query['_gct']
         delete query['_gct']
 
+      if query['_ga']
+        req.headers['accept'] = query['_ga']
+        delete query['_ga']
+
       query
 
     mogrifiedUrl.pathname = pathParts.join '/'
