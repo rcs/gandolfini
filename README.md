@@ -86,7 +86,7 @@ gandolfini = require 'gandolfini'
 http.createServer(
   connect()
     .use(connect.logger())
-    .use(gandolfini())
+    .use(gandolfini.full())
   )
 ).listen(8080);
 ```

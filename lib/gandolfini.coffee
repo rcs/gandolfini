@@ -1,192 +1,179 @@
-http = require 'http'
-url = require 'url'
+URL = require 'url'
 und = require 'underscore'
-winston = require 'winston'
 querystring = require 'querystring'
-
-logger = new (winston.Logger)(
-  transports:[
-    new (winston.transports.Console)(
-      colorize: true
-      timestamp: true
-    )
-  ]
-)
+Path = require 'path'
 
 
-# Internal: Log the origin, target of the proxy request
+# Internal: proxy singleton
 #
-# original  - The originating request
-# proxyReq  - The processed toRequest URL
+# Returns a RoutingProxy
+proxyChannel = do ->
+  proxy = undefined
+  ->
+    proxy ||= new (require 'http-proxy').RoutingProxy();
+
+
+# Public: Give a very allowing response to a CORS pre-flight OPTIONS request
+#
+# req     - The original request
+# res     - The original response
+# options (optional)
+#         allowHeaders     - Allow-Headers to return (default: The request's Access-Control-Request-Headers)
+#         allowCredentials - Allow-Credentials to return (default: 'true')
+#         allowMethods     - Allow-Methods to return (default: The request's Access-Control-Request-Method
+#         maxAge           - Access-Control-Maxe-Age to return (default: 86400)
+#
+# Ex.
+#   if req.method == 'OPTIONS'
+#     wildCors(req,res)
+wildCors = (req,res,options = {}) ->
+  options = und.defaults options,
+    allowHeaders: req['access-control-request-headers']
+    allowMethods: req['access-control-request-method']
+    allowCredentials: 'true'
+    maxAge: 86400
+
+  res.setHeader 'access-control-max-age', options.maxAge
+  res.setHeader 'access-control-allow-credentials', options.allowCredentials
+  res.setHeader 'access-control-allow-methods', options.allowMethods
+  res.setHeader 'access-control-allow-headers', options.allowHeaders
+
+  res.write ''
+  res.end()
+  return
+
+# Public: wrapper function for res.writeHead, adding CORS headers
+#
+# options (optional)
+#         exposeHeaders    -  Value for Access-Control-Expose-Headers (default: all the headers on the response)
+#         allowOrigin      - Value for Access-Control-Allow-Origin (default: '*')
+#         allowCredentials - Value for Access-Control-Allow-Credentials (default: 'true')
+#
+# Returns a function that takes the original writeHead as the first argument, and accepts writeHead's parameters
+#
+# Ex.
+#  res.writeHead = und.wrap res.writeHead, writeCorsHeadFunc(options)
+writeCorsHeadFunc = (options) ->
+  options = und.defaults options,
+    allowOrigin: '*'
+    allowCredentials: 'true'
+
+  (original, statusCode, headers, reasonPhrase) ->
+    # Add CORS headers
+    @setHeader 'access-control-allow-origin', options.allowOrigin
+    @setHeader 'access-control-allow-credentials', options.allowCredentials
+    @setHeader 'access-control-expose-headers', options.exposeHeaders || und.keys(headers).join ','
+    original.call this, statusCode, headers, reasonPhrase
+
+# Public: Proxy a request to a target url
+#
+# req     - The original request
+# res     - The original response
+# url     - The URL to proxy to
+# options - Passed to writeCorsHeadFunc (optional) 
 #
 # Returns nothing
-logProxy = (original,proxyReq) ->
-  ip = original.socket.remoteAddress || '-'
-  ref = original.headers.referer || '-'
-  origin = original.headers.origin || '-'
-
-  logger.info "#{ip} \"#{ref}\" \"#{origin}\"  -> #{proxyReq.protocol}//#{proxyReq.hostname}:#{proxyReq.port}/#{proxyReq.path}"
-
-
-
-# Create the http-proxy we'll use for pushing requests
-proxy = new (require 'http-proxy').RoutingProxy();
-proxy.on 'error', (err) ->
-  logger.error "Error: #{err}"
-proxy.on 'proxyError', (err) ->
-  logger.error "Proxy error: #{err}"
-
-# Internal - Do some sanity checking on the host names we get
 #
-# host - The host to check for validity, possibly containing the ":port" specifier
-#
-# Returns true if valid, false if not
-validHostname = (host) ->
-  [host, port, extra...] = host.split ':'
-  return false if extra.length > 0 # Multiple colons
-  return true if host == 'localhost'
-  return false if host.length > 255             # Max length
-  return false if host.match(/^-/)              # Can't start with hyphen
-  return false if host.match(/-$/)              # Can't end with hyphen
-  return false if host.match(/[^a-z0-9\.-]/i)   # Can't have non alpha-numeric or dash characters (dot for hostnames)
-  return false unless host.match( /\./)         # Must be specified beyond top level name
+# Ex.
+#   bounceToUrl(req,res,'http://www.google.com')
+bounceToUrl = (req, res, url, options = {}) ->
+  options = und.defaults options,
+    allowCredentials: 'true'
+    allowOrigin: '*'
+    headers: {}
+    # exposeHeaders can be passed through to writeCorsHeadFunc
 
-  return true
+  # Make the target URL something useful
+  parsed = URL.parse url
 
+  # Set request URL to the target URL's path
+  req.url = parsed.path
 
-# Public - Configure the middleware
-#
-# options -
-#   allowMethods - An array of methods to say we allow for pre-flight.  (Default: most HTTP verbs)
-#   allowHeaders - An array of header values to say we allow for pre-flight (Default: content-type, x-requested-with, accept, accept-language, accept-range, authorization)
-#
-# Returns the middleware
-exports = module.exports = (options = {}) ->
-  allowMethods = options.allowMethods || ['HEAD', 'GET','POST','PUT', 'DELETE', 'TRACE', 'OPTIONS', 'PATCH'].join ', '
-  allowHeaders = options.allowHeaders || ['content-type','x-requested-with', 'accept', 'accept-language', 'accept-range', 'authorization'].join ', '
+  # Add requested headers
+  for own header, value of options.headers
+    req.headers[header] = value
 
+  # Override writeHead to add CORS headers to response
+  res.writeHead = und.wrap res.writeHead, writeCorsHeadFunc(options)
 
-
-  # Public - the middleware
-  #
-  # Responds to OPTIONS pre-flight request with CORS headers set
-  #
-  # Other methods proxy the requests to the URL specified in the req.path, with optional protocol
-  # CORS headers are set on the responses.
-  #
-  # ex.
-  #   '/example.com'                  -> http://example.com
-  #   '/https/example.com'            -> https://example.com
-  #   '/example.com:8080/a/b/c?query' -> http://example.com/a/b/c?query
-  #
-  return (req,res,next) ->
-
-    # Write the pre-flight response
-    if req.method == 'OPTIONS'
-      # TODO - proxy options request to remote server
-      res.setHeader 'access-control-max-age', 86400
-      res.setHeader 'access-control-allow-credentials', 'true'
-      res.setHeader 'access-control-allow-methods', allowMethods
-      res.setHeader 'access-control-allow-headers', req['access-control-request-headers'] || allowHeaders
-
-      res.write ''
-      res.end()
-      return
-
-
-    parsedUrl = url.parse(req.url)
-
-    mogrifiedUrl = {}
-
-    # 1 to avoid the initial empty element
-    pathParts = parsedUrl.pathname.split('/')[1..]
-
-    mogrifiedUrl.protocol = if pathParts[0] in ['http','https']
-      pathParts.shift()
-    else
-      'http'
-
-    [mogrifiedUrl.host, mogrifiedUrl.port] = (pathParts.shift()).split ':'
-
-    mogrifiedUrl.pathname = pathParts.join '/'
-
-
-    # Snarf gandolfini specific query parameters out of the URL
-    referer = undefined
-    mogrifiedUrl.query = do ->
-
-      return parsedUrl.query unless parsedUrl.query
-
-      query = querystring.parse(parsedUrl.query)
-      if query['_gr']
-        req.headers['referer'] = query['_gr']
-        delete query['_gr']
-
-      if query['_gct']
-        req.headers['content-type'] = query['_gct']
-        delete query['_gct']
-
-      if query['_ga']
-        req.headers['accept'] = query['_ga']
-        delete query['_ga']
-
-      query
-
-    mogrifiedUrl.pathname = pathParts.join '/'
-
-    # If we can't find a valid host, respond status 400
-    if !mogrifiedUrl.host or !validHostname(mogrifiedUrl.host)
-      res.writeHead 400
-      res.end()
-      return
-
-    # Internal - Write the CORS headers on proxied responses
-    # Modifies response inline
-    #
-    # Returns nothing
-
-    # Save original writeHead for overriden use
-    origWriteHead = res.writeHead
-    res.writeHead = (statusCode, reasonPhrase, headers) ->
-
-      headers = reasonPhrase if !headers?
-
-      if req.headers.origin
-        @setHeader 'access-control-allow-origin', req.headers.origin
+  # Send the modified request to the proxy channel, setting target to our parsed fragments
+  proxyChannel().proxyRequest(req, res, {
+    host: parsed.hostname
+    port: parsed.port || if (parsed.protocol.match /^https/ ) then 443 else 80
+    target: if (parsed.protocol == 'https:')
+        { https: true }
       else
-        @setHeader 'access-control-allow-origin', '*'
+        {}
+    # Changes the Host: header on outgoing request to match the target
+    changeOrigin: true
+  });
 
-      @setHeader 'access-control-allow-credentials', 'true'
-      @setHeader 'access-control-expose-headers', und.keys(headers)
-      origWriteHead.apply this, arguments
+# Public: Return a url path with a prefix
+#
+# Supports passing a protocol as the first part of the path past the prefix
+#
+# Ex.
+#   urlFromPrefix('/proxy','/proxy/www.google.com') # -> 'www.google.com'
+#   urlFromPrefix('/proxy','/proxy/https/www.google.com') # -> 'https://www.google.com'
+urlFromPrefixed = (prefix,path) ->
+  finalUrl = {}
 
+  [targetPath, query] = Path.relative(prefix, path).split '?'
+  pathParts = targetPath.split('/')
 
+  finalUrl.protocol = if pathParts[0] in ['http','https']
+    pathParts.shift()
+  else
+    'http'
 
-    # Set the port if not set
-    targetPort = mogrifiedUrl.port || if (mogrifiedUrl.protocol.match /^https/ ) then 443 else 80
+  finalUrl.host =  pathParts.shift()
 
+  finalUrl.pathname = pathParts.join '/'
 
-    # Round-trip through url to fill structure
-    finalUrl = url.parse url.format mogrifiedUrl
+  if query
+    finalUrl.search = '?' + query 
 
-    # Create a the proxy target url from parts
-    toRequestUrl = url.format(finalUrl)
+  URL.parse URL.format finalUrl
 
-    # Set request url to target url
-    req.url = finalUrl.path
+# Public: Handle proxying urls 
+#
+# req          - the original request
+# res          - the original response
+# options -
+#         pathPrefix   - the path prefix to proxy requests from (default: "/")
+#         headerReplacements - An Object mapping query parameters to headers to add to the outgoing request
+#
+# Ex.
+#   bouncingProxy(req,res,"/proxy",{"_gr": "referer"})
+bouncingProxy = (req,res,options) ->
+  options = und.defaults options,
+    pathPrefix: "/"
+    headerReplacements:
+      _gr: 'referer'
+      _gct: 'content-type'
+      _ga: 'accept'
 
-    # Log our intentions
-    logProxy req, finalUrl
+  targetUrl = URL.parse urlFromPrefixed( options.pathPrefix, req.url)
 
+  targetUrl.query = do (query = querystring.parse(targetUrl.query)) ->
+    for queryParam, header of options.headerReplacements when query[queryParam]
+      req.headers[header] = query[queryParam]
+      delete query[queryParam]
 
-    # Send the modified request to the proxy channel, setting target to our
-    # parsed fragments
-    proxy.proxyRequest(req, res, {
-      host: finalUrl.hostname
-      port: targetPort
-      target: if (finalUrl.protocol == 'https:')
-          { https: true }
-        else
-          {}
-      changeOrigin: true
-    });
+    query
+
+  bounceToUrl(req,res,URL.format(targetUrl))
+
+module.exports = 
+  full: (options) ->
+    (req,res) ->
+      if req.method == 'OPTIONS'
+        wildCors(req,res)
+      else
+        bouncingProxy(req,res,options)
+
+  wildCors: wildCors
+  writeCorsHeadFunc: writeCorsHeadFunc
+  bounceToUrl: bounceToUrl
+  urlFromPrefixed: urlFromPrefixed
+  bouncingProxy: bouncingProxy
